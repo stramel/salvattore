@@ -36,6 +36,7 @@ gulp.task('default', function() {
             }
         }))
         .pipe(header(banner, {pkg: package}))
+        .pipe(size({showFiles: true, gzip: true}))
         .pipe(gulp.dest('dist/'))
         .pipe(uglify({preserveComments: 'some'}))
         .pipe(rename({suffix: '.min'}))

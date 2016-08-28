@@ -192,56 +192,71 @@ if (typeof window.CustomEvent !== "function") {
 
 /* jshint laxcomma: true */
 var salvattore = (function (global, document, undefined) {
-"use strict";
+'use strict';
 
-var self = {},
-    grids = [],
-    mediaRules = [],
-    mediaQueries = [],
-    add_to_dataset = function(element, key, value) {
-      // uses dataset function or a fallback for <ie10
-      if (element.dataset) {
-        element.dataset[key] = value;
-      } else {
-        element.setAttribute("data-" + key, value);
-      }
-      return;
-    };
+var self = {}
+  , grids = []
+  , mediaRules = []
+  , mediaQueries = []
+  , balanced = false
+  , addToDataset = function (element, key, value) {
+    // uses dataset function or a fallback for <ie10
+    if (element.dataset) {
+      element.dataset[key] = value;
+    } else {
+      element.setAttribute('data-' + key, value);
+    }
+    return;
+  }
+  , getFromDataset = function (element, key, value) {
+    // uses dataset function or a fallback for <ie10
+    if (element.dataset) {
+      return element.dataset[key];
+    } else {
+      return element.setAttribute('data-' + key);
+    }
+  }
+  ;
 
-self.obtainGridSettings = function obtainGridSettings(element) {
+self.obtainGridSettings = function (element) {
   // returns the number of columns and the classes a column should have,
   // from computing the style of the ::before pseudo-element of the grid.
 
-  var computedStyle = global.getComputedStyle(element, ":before")
-    , content = computedStyle.getPropertyValue("content").slice(1, -1)
-    , matchResult = content.match(/^\s*(\d+)(?:\s?\.(.+))?\s*$/)
-    , numberOfColumns = 1
+  var computedStyle = global.getComputedStyle(element, ':before')
+    , content = computedStyle.getPropertyValue('content').slice(1, -1)
+    , settingsRegex = /^\s*(\d+)((?:\s*(?:\.-?[_a-zA-Z]+[_a-zA-Z0-9-]*))+)\s*(balanced)?\s*$/
+    , matchResult = content.match(settingsRegex)
+    , numberOfColumns = '1'
     , columnClasses = []
+    , balanced = false
   ;
 
   if (matchResult) {
     numberOfColumns = matchResult[1];
-    columnClasses = matchResult[2];
-    columnClasses = columnClasses? columnClasses.split(".") : ["column"];
-  } else {
-    matchResult = content.match(/^\s*\.(.+)\s+(\d+)\s*$/);
-    if (matchResult) {
-      columnClasses = matchResult[1];
-      numberOfColumns = matchResult[2];
-      if (numberOfColumns) {
-            numberOfColumns = numberOfColumns.split(".");
-      }
+
+    columnClasses = matchResult[2].trim();
+    columnClasses = columnClasses.split(".");
+    // To remove empty first element
+    columnClasses.shift();
+     // Trim spaces on all
+    columnClasses = columnClasses.map(Function.prototype.call, String.prototype.trim);
+
+    if (matchResult[3] && matchResult[3] === "balanced") {
+      balanced = true;
     }
+  } else {
+    columnClasses = ["column"];
   }
 
   return {
     numberOfColumns: numberOfColumns,
-    columnClasses: columnClasses
+    columnClasses: columnClasses,
+    balanced: balanced
   };
 };
 
 
-self.addColumns = function addColumns(grid, items) {
+self.addColumns = function (grid, items) {
   // from the settings obtained, it creates columns with
   // the configured classes and adds to them a list of items.
 
@@ -254,38 +269,54 @@ self.addColumns = function addColumns(grid, items) {
     , selector
   ;
 
-  while (i-- !== 0) {
-    selector = "[data-columns] > *:nth-child(" + numberOfColumns + "n-" + i + ")";
-    columnsItems.push(items.querySelectorAll(selector));
+  self.balanced = settings.balanced;
+
+  if (self.balanced) {
+    while (i-- !== 0) {
+      var column = document.createElement('div');
+      column.className = columnClasses.join(' ');
+      columnsFragment.appendChild(column);
+    }
+
+    grid.appendChild(columnsFragment);
+    self.appendElements(grid, Array.prototype.slice.call(items.children));
+  } else { // by order
+    while (i-- !== 0) {
+      selector = "[data-columns] > *:nth-child(" + numberOfColumns + "n-" + i + ")";
+      columnsItems.push(items.querySelectorAll(selector));
+    }
+
+    columnsItems.forEach(function (rows) {
+      var column = document.createElement("div")
+        , rowsFragment = document.createDocumentFragment()
+      ;
+
+      column.className = columnClasses.join(" ");
+
+      Array.prototype.forEach.call(rows, function (row) {
+        rowsFragment.appendChild(row);
+      });
+      column.appendChild(rowsFragment);
+      columnsFragment.appendChild(column);
+    });
+
+    grid.appendChild(columnsFragment);
   }
 
-  columnsItems.forEach(function append_to_grid_fragment(rows) {
-    var column = document.createElement("div")
-      , rowsFragment = document.createDocumentFragment()
-    ;
 
-    column.className = columnClasses.join(" ");
 
-    Array.prototype.forEach.call(rows, function append_to_column(row) {
-      rowsFragment.appendChild(row);
-    });
-    column.appendChild(rowsFragment);
-    columnsFragment.appendChild(column);
-  });
-
-  grid.appendChild(columnsFragment);
-  add_to_dataset(grid, 'columns', numberOfColumns);
+  addToDataset(grid, 'columns', numberOfColumns);
 };
 
 
-self.removeColumns = function removeColumns(grid) {
+self.removeColumns = function (grid) {
   // removes all the columns from a grid, and returns a list
   // of items sorted by the ordering of columns.
 
   var range = document.createRange();
   range.selectNodeContents(grid);
 
-  var columns = Array.prototype.filter.call(range.extractContents().childNodes, function filter_elements(node) {
+  var columns = Array.prototype.filter.call(range.extractContents().childNodes, function (node) {
     return node instanceof global.HTMLElement;
   });
 
@@ -294,18 +325,18 @@ self.removeColumns = function removeColumns(grid) {
     , sortedRows = new Array(numberOfRowsInFirstColumn * numberOfColumns)
   ;
 
-  Array.prototype.forEach.call(columns, function iterate_columns(column, columnIndex) {
-    Array.prototype.forEach.call(column.children, function iterate_rows(row, rowIndex) {
+  Array.prototype.forEach.call(columns, function (column, columnIndex) {
+    Array.prototype.forEach.call(column.children, function (row, rowIndex) {
       sortedRows[rowIndex * numberOfColumns + columnIndex] = row;
     });
   });
 
-  var container = document.createElement("div");
-  add_to_dataset(container, 'columns', 0);
+  var container = document.createElement('div');
+  addToDataset(container, 'columns', 0);
 
-  sortedRows.filter(function filter_non_null(child) {
+  sortedRows.filter(function (child) {
     return !!child;
-  }).forEach(function append_row(child) {
+  }).forEach(function (child) {
     container.appendChild(child);
   });
 
@@ -313,29 +344,41 @@ self.removeColumns = function removeColumns(grid) {
 };
 
 
-self.recreateColumns = function recreateColumns(grid) {
+self.recreateColumns = function (grid) {
   // removes all the columns from the grid, and adds them again,
   // it is used when the number of columns change.
 
-  global.requestAnimationFrame(function render_after_css_mediaQueryChange() {
+  global.requestAnimationFrame(function () {
     self.addColumns(grid, self.removeColumns(grid));
-    var columnsChange = new CustomEvent("columnsChange");
+    var columnsChange = new CustomEvent('columnsChange');
     grid.dispatchEvent(columnsChange);
   });
 };
 
 
-self.mediaQueryChange = function mediaQueryChange(mql) {
+self.resort = function () {
+  var scrollOffset = window.pageYOffset;
+
+  Array.prototype.forEach.call(grids, self.recreateColumns);
+
+  global.requestAnimationFrame(function () {
+    document.documentElement.scrollTop = scrollOffset;
+    document.body.scrollTop = scrollOffset;
+  });
+};
+
+
+self.mediaQueryChange = function (mql) {
   // recreates the columns when a media query matches the current state
   // of the browser.
 
   if (mql.matches) {
-    Array.prototype.forEach.call(grids, self.recreateColumns);
+    self.resort();
   }
 };
 
 
-self.getCSSRules = function getCSSRules(stylesheet) {
+self.getCSSRules = function (stylesheet) {
   // returns a list of css rules from a stylesheet
 
   var cssRules;
@@ -349,10 +392,10 @@ self.getCSSRules = function getCSSRules(stylesheet) {
 };
 
 
-self.getStylesheets = function getStylesheets() {
+self.getStylesheets = function () {
   // returns a list of all the styles in the document (that are accessible).
 
-  var inlineStyleBlocks = Array.prototype.slice.call(document.querySelectorAll("style"));
+  var inlineStyleBlocks = Array.prototype.slice.call(document.querySelectorAll('style'));
   inlineStyleBlocks.forEach(function(stylesheet, idx) {
     if (stylesheet.type !== 'text/css' && stylesheet.type !== '') {
       inlineStyleBlocks.splice(idx, 1);
@@ -366,7 +409,7 @@ self.getStylesheets = function getStylesheets() {
 };
 
 
-self.mediaRuleHasColumnsSelector = function mediaRuleHasColumnsSelector(rules) {
+self.mediaRuleHasColumnsSelector = function (rules) {
   // checks if a media query css rule has in its contents a selector that
   // styles the grid.
 
@@ -390,7 +433,7 @@ self.mediaRuleHasColumnsSelector = function mediaRuleHasColumnsSelector(rules) {
 };
 
 
-self.scanMediaQueries = function scanMediaQueries() {
+self.scanMediaQueries = function () {
   // scans all the stylesheets for selectors that style grids,
   // if the matchMedia API is supported.
 
@@ -400,8 +443,8 @@ self.scanMediaQueries = function scanMediaQueries() {
     return;
   }
 
-  self.getStylesheets().forEach(function extract_rules(stylesheet) {
-    Array.prototype.forEach.call(self.getCSSRules(stylesheet), function filter_by_column_selector(rule) {
+  self.getStylesheets().forEach(function (stylesheet) {
+    Array.prototype.forEach.call(self.getCSSRules(stylesheet), function (rule) {
       // rule.media throws an 'not implemented error' in ie9 for import rules occasionally
       try {
         if (rule.media && rule.cssRules && self.mediaRuleHasColumnsSelector(rule.cssRules)) {
@@ -430,7 +473,7 @@ self.scanMediaQueries = function scanMediaQueries() {
   }).forEach(function (rule) {
       var mql = global.matchMedia(rule.media.mediaText);
       mql.addListener(self.mediaQueryChange);
-      mediaQueries.push({rule: rule, mql:mql});
+      mediaQueries.push({rule: rule, mql: mql});
   });
 
   // swap mediaRules with the new set
@@ -439,13 +482,13 @@ self.scanMediaQueries = function scanMediaQueries() {
 };
 
 
-self.rescanMediaQueries = function rescanMediaQueries() {
+self.rescanMediaQueries = function () {
     self.scanMediaQueries();
-    Array.prototype.forEach.call(grids, self.recreateColumns);
+    self.resort();
 };
 
 
-self.nextElementColumnIndex = function nextElementColumnIndex(grid, fragments) {
+self.nextElementColumnIndex = function (grid, fragments) {
   // returns the index of the column where the given element must be added.
 
   var children = grid.children
@@ -455,13 +498,36 @@ self.nextElementColumnIndex = function nextElementColumnIndex(grid, fragments) {
     , currentRowCount
     , i
     , index = 0
+    , colsHeight = []
+    , minColHeight
   ;
+  var getPossibleHeight = function (el) {
+    colsHeight[i] += self.getHeightFromElement(el);
+  };
+
+  if (self.balanced) {
+    for (i = 0; i < m; i++) {
+      // get used height
+      colsHeight[i] = self.getHeightFromElement(children[i]);
+      // get probably used height
+      Array.prototype.forEach.call(fragments[i].childNodes, getPossibleHeight);
+    }
+    minColHeight = Math.min.apply(Math, colsHeight);
+    // we assume height were available if we have something
+    // so we return the index of the column with the shortest height
+    if (minColHeight > 0) {
+      return colsHeight.indexOf(minColHeight);
+    }
+  }
+
+  // Fallback to order or use it by default
   for (i = 0; i < m; i++) {
     child = children[i];
     currentRowCount = child.children.length + (fragments[i].children || fragments[i].childNodes).length;
-  if(lowestRowCount === 0) {
-    lowestRowCount = currentRowCount;
-  }
+
+    if(lowestRowCount === 0) {
+      lowestRowCount = currentRowCount;
+    }
     if(currentRowCount < lowestRowCount) {
       index = i;
       lowestRowCount = currentRowCount;
@@ -472,7 +538,7 @@ self.nextElementColumnIndex = function nextElementColumnIndex(grid, fragments) {
 };
 
 
-self.createFragmentsList = function createFragmentsList(quantity) {
+self.createFragmentsList = function (quantity) {
   // returns a list of fragments
 
   var fragments = new Array(quantity)
@@ -488,26 +554,37 @@ self.createFragmentsList = function createFragmentsList(quantity) {
 };
 
 
-self.appendElements = function appendElements(grid, elements) {
+self.appendElements = function (grid, elements) {
   // adds a list of elements to the end of a grid
 
   var columns = grid.children
     , numberOfColumns = columns.length
     , fragments = self.createFragmentsList(numberOfColumns)
+    , heightContainer = document.createElement('div')
   ;
 
-  Array.prototype.forEach.call(elements, function append_to_next_fragment(element) {
+  if (self.balanced) {
+    // first of all, append all items to a column to be able to retrieve proper height
+    // (if you try to do that hidden from the screen, you can miss the good DOM/CSS context)
+    heightContainer.className = self.obtainGridSettings(grid).columnClasses.join(' ');
+    heightContainer.appendChild(self.createFragment(elements));
+    grid.appendChild(heightContainer);
+    self.saveElementsHeight(elements);
+    grid.removeChild(heightContainer);
+  }
+
+  Array.prototype.forEach.call(elements, function (element) {
     var columnIndex = self.nextElementColumnIndex(grid, fragments);
     fragments[columnIndex].appendChild(element);
   });
 
-  Array.prototype.forEach.call(columns, function insert_column(column, index) {
+  Array.prototype.forEach.call(columns, function (column, index) {
     column.appendChild(fragments[index]);
   });
 };
 
 
-self.prependElements = function prependElements(grid, elements) {
+self.prependElements = function (grid, elements) {
   // adds a list of elements to the start of a grid
 
   var columns = grid.children
@@ -516,7 +593,7 @@ self.prependElements = function prependElements(grid, elements) {
     , columnIndex = numberOfColumns - 1
   ;
 
-  elements.forEach(function append_to_next_fragment(element) {
+  elements.forEach(function (element) {
     var fragment = fragments[columnIndex];
     fragment.insertBefore(element, fragment.firstChild);
     if (columnIndex === 0) {
@@ -526,7 +603,7 @@ self.prependElements = function prependElements(grid, elements) {
     }
   });
 
-  Array.prototype.forEach.call(columns, function insert_column(column, index) {
+  Array.prototype.forEach.call(columns, function (column, index) {
     column.insertBefore(fragments[index], column.firstChild);
   });
 
@@ -544,8 +621,8 @@ self.prependElements = function prependElements(grid, elements) {
 };
 
 
-self.registerGrid = function registerGrid (grid) {
-  if (global.getComputedStyle(grid).display === "none") {
+self.registerGrid = function (grid) {
+  if (global.getComputedStyle(grid).display === 'none') {
     return;
   }
 
@@ -553,30 +630,60 @@ self.registerGrid = function registerGrid (grid) {
   var range = document.createRange();
   range.selectNodeContents(grid);
 
-  var items = document.createElement("div");
+  var items = document.createElement('div');
   items.appendChild(range.extractContents());
 
 
-  add_to_dataset(items, 'columns', 0);
+  addToDataset(items, 'columns', 0);
   self.addColumns(grid, items);
   grids.push(grid);
 };
 
 
-self.init = function init() {
+self.createFragment = function (elements) {
+  var frag = document.createDocumentFragment();
+  Array.prototype.forEach.call(elements, function (element) {
+    frag.appendChild(element);
+  });
+  return frag;
+};
+
+
+self.getHeightFromElement = function (el) {
+  var height = el.getBoundingClientRect().height;
+  if (!height) {
+    var h = getFromDataset(el, 'salvatorreHeight');
+    if (h) {
+      height = parseInt(h, 10);
+    }
+  }
+  return height;
+};
+
+
+self.saveElementsHeight = function (elements) {
+  Array.prototype.forEach.call(elements, function (el) {
+    addToDataset(el, 'salvatorreHeight', Math.floor(el.getBoundingClientRect().height));
+  });
+};
+
+
+self.init = function () {
   // adds required CSS rule to hide 'content' based
   // configuration.
 
-  var css = document.createElement("style");
-  css.innerHTML = "[data-columns]::before{display:block;visibility:hidden;position:absolute;font-size:1px;}";
+  var css = document.createElement('style');
+  css.innerHTML = '[data-columns]::before{display:block;visibility:hidden;position:absolute;font-size:1px;}';
   document.head.appendChild(css);
 
   // scans all the grids in the document and generates
   // columns from their configuration.
 
-  var gridElements = document.querySelectorAll("[data-columns]");
+  var gridElements = document.querySelectorAll('[data-columns]');
   Array.prototype.forEach.call(gridElements, self.registerGrid);
   self.scanMediaQueries();
+
+  window.onresize = self.resort;
 };
 
 self.init();
@@ -588,6 +695,8 @@ return {
   recreateColumns: self.recreateColumns,
   rescanMediaQueries: self.rescanMediaQueries,
   init: self.init,
+  resort: self.resort,
+  _obtainGridSettings: self.obtainGridSettings,
 
   // maintains backwards compatibility with underscore style method names
   append_elements: self.appendElements,
