@@ -585,7 +585,7 @@ self.appendElements = function (grid, elements) {
 
 self.clearGrid = function (grid) {
   var last;
-  while (last = grid.lastChild) {
+  while ((last = grid.lastChild)) {
     grid.removeChild(last);
   }
 };
