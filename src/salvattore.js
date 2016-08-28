@@ -391,6 +391,24 @@ self.appendElements = function (grid, elements) {
   });
 };
 
+self.clearGrid = function (grid) {
+  var last;
+  while ((last = grid.lastChild)) {
+    grid.removeChild(last);
+  }
+};
+
+self.destroy = function (grid) {
+  self.clearGrid(grid);
+  grid.remove();
+};
+
+self.reinit = function (grid) {
+  self.clearGrid(grid);
+  self.init();
+  self.registerGrid(grid);
+};
+
 
 self.prependElements = function (grid, elements) {
   // adds a list of elements to the start of a grid
@@ -503,6 +521,7 @@ return {
   recreateColumns: self.recreateColumns,
   rescanMediaQueries: self.rescanMediaQueries,
   init: self.init,
+  reinit: self.reinit,
   resort: self.resort,
   _obtainGridSettings: self.obtainGridSettings,
 

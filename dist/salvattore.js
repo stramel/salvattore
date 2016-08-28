@@ -579,8 +579,26 @@ self.appendElements = function (grid, elements) {
   });
 
   Array.prototype.forEach.call(columns, function (column, index) {
-    column.appendChild(fragments[index]);
+      column.appendChild(fragments[index]);
   });
+};
+
+self.clearGrid = function (grid) {
+  var last;
+  while (last = grid.lastChild) {
+    grid.removeChild(last);
+  }
+};
+
+self.destroy = function (grid) {
+  self.clearGrid(grid);
+  grid.remove();
+};
+
+self.reinit = function (grid) {
+  self.clearGrid(grid);
+  self.init();
+  self.registerGrid(grid);
 };
 
 
@@ -695,6 +713,7 @@ return {
   recreateColumns: self.recreateColumns,
   rescanMediaQueries: self.rescanMediaQueries,
   init: self.init,
+  reinit: self.reinit,
   resort: self.resort,
   _obtainGridSettings: self.obtainGridSettings,
 
