@@ -111,8 +111,6 @@ self.addColumns = function (grid, items) {
     grid.appendChild(columnsFragment);
   }
 
-
-
   addToDataset(grid, 'columns', numberOfColumns);
 };
 
@@ -362,7 +360,7 @@ self.createFragmentsList = function (quantity) {
 };
 
 
-self.appendElements = function (grid, elements) {
+self.appendElements = function (grid, elements, callback) {
   // adds a list of elements to the end of a grid
 
   var columns = grid.children
@@ -389,6 +387,10 @@ self.appendElements = function (grid, elements) {
   Array.prototype.forEach.call(columns, function (column, index) {
       column.appendChild(fragments[index]);
   });
+
+  if (callback && typeof callback === 'function') {
+    callback();
+  }
 };
 
 self.clearGrid = function (grid) {
